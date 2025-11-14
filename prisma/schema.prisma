@@ -1,0 +1,235 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  STAFF
+  USER
+  GATE_OPERATOR
+}
+
+enum EventStatus {
+  UPCOMING
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum TicketStatus {
+  ACTIVE
+  USED
+  CANCELLED
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  CANCELLED
+  REFUNDED
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String?
+  phone         String?
+  role          UserRole @default(USER)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relations
+  orders        Order[]
+  tickets       Ticket[]
+  gateScans     GateScan[]
+  
+  @@map("users")
+}
+
+model Event {
+  id              String         @id @default(cuid())
+  title           String
+  description     String
+  venue           String
+  address         String
+  startDate       DateTime
+  endDate         DateTime
+  maxCapacity     Int
+  currentCapacity Int            @default(0)
+  status          EventStatus    @default(UPCOMING)
+  imageUrl        String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  // Relations
+  ticketTypes     TicketType[]
+  orders          Order[]
+  tickets         Ticket[]
+  gateEntries     GateEntry[]
+  
+  @@map("events")
+}
+
+model TicketType {
+  id              String     @id @default(cuid())
+  eventId         String
+  name            String
+  description     String?
+  price           Float
+  maxQuantity     Int
+  soldQuantity    Int        @default(0)
+  isValid         Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  
+  // Relations
+  event           Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  orderItems      OrderItem[]
+  tickets         Ticket[]
+  
+  @@map("ticket_types")
+}
+
+model Order {
+  id              String       @id @default(cuid())
+  userId          String
+  eventId         String
+  totalAmount     Float
+  status          OrderStatus  @default(PENDING)
+  paymentMethod   String?
+  paymentId       String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  
+  // Relations
+  user            User         @relation(fields: [userId], references: [id])
+  event           Event        @relation(fields: [eventId], references: [id])
+  items           OrderItem[]
+  tickets         Ticket[]
+  
+  @@map("orders")
+}
+
+model OrderItem {
+  id              String   @id @default(cuid())
+  orderId         String
+  ticketTypeId    String
+  quantity        Int
+  unitPrice       Float
+  totalPrice      Float
+  
+  // Relations
+  order           Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  ticketType      TicketType  @relation(fields: [ticketTypeId], references: [id])
+  
+  @@map("order_items")
+}
+
+model Ticket {
+  id              String       @id @default(cuid())
+  userId          String
+  orderId         String
+  ticketTypeId    String
+  eventId         String
+  qrCode          String       @unique
+  status          TicketStatus @default(ACTIVE)
+  scannedAt       DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  
+  // Relations
+  user            User         @relation(fields: [userId], references: [id])
+  order           Order        @relation(fields: [orderId], references: [id])
+  ticketType      TicketType   @relation(fields: [ticketTypeId], references: [id])
+  event           Event        @relation(fields: [eventId], references: [id])
+  gateScans       GateScan[]
+  
+  @@map("tickets")
+}
+
+model GateEntry {
+  id              String   @id @default(cuid())
+  eventId         String
+  name            String
+  location        String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  event           Event    @relation(fields: [eventId], references: [id])
+  gateScans       GateScan[]
+  
+  @@map("gate_entries")
+}
+
+model GateScan {
+  id              String   @id @default(cuid())
+  ticketId        String
+  gateEntryId     String
+  scannedBy       String?
+  scanTime        DateTime @default(now())
+  isValid         Boolean  @default(true)
+  notes           String?
+  
+  // Relations
+  ticket          Ticket   @relation(fields: [ticketId], references: [id])
+  gateEntry       GateEntry @relation(fields: [gateEntryId], references: [id])
+  user            User?    @relation(fields: [scannedBy], references: [id])
+  
+  @@map("gate_scans")
+}
+
+model HeroSlide {
+  id        String   @id @default(cuid())
+  title     String
+  subtitle  String?
+  imageUrl  String
+  ctaLabel  String?
+  ctaLink   String?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("hero_slides")
+  @@index([isActive, sortOrder])
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  GATE_OPERATOR
+}
+
+enum EventStatus {
+  UPCOMING
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  CANCELLED
+  REFUNDED
+}
+
+enum TicketStatus {
+  ACTIVE
+  USED
+  CANCELLED
+  EXPIRED
+}
