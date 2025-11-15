@@ -45,10 +45,10 @@ export default function Success() {
   const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
-    if (params.id) {
+    if (params?.id) {
       fetchOrder(params.id as string)
     }
-  }, [params.id])
+  }, [params?.id])
 
   const fetchOrder = async (orderId: string) => {
     try {

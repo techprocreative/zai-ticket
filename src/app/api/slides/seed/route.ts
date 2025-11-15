@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { HeroSlide } from '@prisma/client'
 
 const SAMPLE_SLIDES = [
   {
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
       await db.heroSlide.deleteMany()
     }
 
-    const results = []
+    const results: HeroSlide[] = []
     for (const slide of SAMPLE_SLIDES) {
       const { id, ...data } = slide
       const upserted = await db.heroSlide.upsert({

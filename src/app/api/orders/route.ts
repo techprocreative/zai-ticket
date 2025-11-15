@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { randomBytes } from 'crypto'
+import { midtransClient, generateSnapParams } from '@/lib/midtrans'
+import { env } from '@/lib/env'
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { userId, eventId, items, totalAmount, paymentMethod } = body
+    const { userId, eventId, items, totalAmount } = body
 
     if (!userId || !eventId || !items || items.length === 0) {
       return NextResponse.json(
@@ -14,16 +15,41 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Validate items and check availability
+    for (const item of items) {
+      const ticketType = await db.ticketType.findUnique({
+        where: { id: item.ticketTypeId }
+      })
+
+      if (!ticketType) {
+        return NextResponse.json(
+          { error: `Ticket type ${item.ticketTypeId} not found` },
+          { status: 404 }
+        )
+      }
+
+      const available = ticketType.maxQuantity - ticketType.soldQuantity
+      if (available < item.quantity) {
+        return NextResponse.json(
+          { error: `Only ${available} tickets available for ${ticketType.name}` },
+          { status: 400 }
+        )
+      }
+    }
+
     // Start transaction
     const result = await db.$transaction(async (tx) => {
-      // Create order
+      // Set expiry time (30 minutes from now)
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000)
+
+      // Create order (WITHOUT tickets - tickets created after payment)
       const order = await tx.order.create({
         data: {
           userId,
           eventId,
           totalAmount,
           status: 'PENDING',
-          paymentMethod,
+          expiresAt, // Set expiry
           items: {
             create: items.map((item: any) => ({
               ticketTypeId: item.ticketTypeId,
@@ -34,30 +60,18 @@ export async function POST(request: NextRequest) {
           }
         },
         include: {
-          items: true,
-          event: true
+          items: {
+            include: {
+              ticketType: true
+            }
+          },
+          event: true,
+          user: true
         }
       })
 
-      // Create tickets for each order item
-      const tickets = []
+      // Reserve tickets (increment soldQuantity)
       for (const item of items) {
-        for (let i = 0; i < item.quantity; i++) {
-          const qrCode = generateQRCode(order.id, item.ticketTypeId, i)
-          const ticket = await tx.ticket.create({
-            data: {
-              userId,
-              orderId: order.id,
-              ticketTypeId: item.ticketTypeId,
-              eventId,
-              qrCode,
-              status: 'ACTIVE'
-            }
-          })
-          tickets.push(ticket)
-        }
-
-        // Update ticket type sold quantity
         await tx.ticketType.update({
           where: { id: item.ticketTypeId },
           data: {
@@ -68,21 +82,83 @@ export async function POST(request: NextRequest) {
         })
       }
 
-      // Update event current capacity
-      const totalTickets = items.reduce((sum: number, item: any) => sum + item.quantity, 0)
-      await tx.event.update({
-        where: { id: eventId },
+      return order
+    })
+
+    // Generate Midtrans Snap token
+    try {
+      const snapItems = result.items.map(item => ({
+        id: item.ticketTypeId,
+        price: item.unitPrice,
+        quantity: item.quantity,
+        name: item.ticketType.name
+      }))
+
+      const customer = {
+        first_name: result.user.name?.split(' ')[0] || 'User',
+        last_name: result.user.name?.split(' ').slice(1).join(' ') || '',
+        email: result.user.email,
+        phone: result.user.phone || '08123456789'
+      }
+
+      const callbackUrl = `${env.NEXTAUTH_URL}/success/${result.id}`
+
+      const snapParams = generateSnapParams(
+        result.id,
+        snapItems,
+        customer,
+        callbackUrl
+      )
+
+      const snapResponse = await midtransClient.createTransaction(snapParams)
+
+      // Update order with Snap token
+      await db.order.update({
+        where: { id: result.id },
         data: {
-          currentCapacity: {
-            increment: totalTickets
-          }
+          midtransSnapToken: snapResponse.token,
+          paymentUrl: snapResponse.redirect_url,
+          updatedAt: new Date()
         }
       })
 
-      return { order, tickets }
-    })
+      console.log('Order created with Snap token:', result.id)
 
-    return NextResponse.json(result.order, { status: 201 })
+      return NextResponse.json({
+        orderId: result.id,
+        snapToken: snapResponse.token,
+        paymentUrl: snapResponse.redirect_url,
+        expiresAt: result.expiresAt,
+        totalAmount: result.totalAmount
+      }, { status: 201 })
+
+    } catch (snapError) {
+      console.error('Failed to create Snap token:', snapError)
+      
+      // If Snap creation fails, cancel the order
+      await db.$transaction(async (tx) => {
+        await tx.order.update({
+          where: { id: result.id },
+          data: { status: 'CANCELLED' }
+        })
+
+        // Restore ticket availability
+        for (const item of result.items) {
+          await tx.ticketType.update({
+            where: { id: item.ticketTypeId },
+            data: {
+              soldQuantity: { decrement: item.quantity }
+            }
+          })
+        }
+      })
+
+      return NextResponse.json(
+        { error: 'Failed to create payment token. Please try again.' },
+        { status: 500 }
+      )
+    }
+
   } catch (error) {
     console.error('Failed to create order:', error)
     return NextResponse.json(
@@ -151,10 +227,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     )
   }
-}
-
-function generateQRCode(orderId: string, ticketTypeId: string, index: number): string {
-  const timestamp = Date.now()
-  const random = randomBytes(8).toString('hex')
-  return `TKT-${orderId}-${ticketTypeId}-${index}-${timestamp}-${random}`
 }

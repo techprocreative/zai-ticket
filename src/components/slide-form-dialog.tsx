@@ -24,7 +24,7 @@ const slideSchema = z.object({
   imageUrl: z.string().url(),
   ctaLabel: z.string().optional(),
   ctaLink: z.string().url().optional(),
-  sortOrder: z.preprocess((val) => Number(val), z.number().int().min(0)),
+  sortOrder: z.number().int().min(0),
   isActive: z.boolean()
 })
 
@@ -163,7 +163,11 @@ export function SlideFormDialog({ open, onOpenChange, onSubmit, initialData }: S
                   <FormItem>
                     <FormLabel>Urutan</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                      <Input
+                        type="number"
+                        {...field}
+                        onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

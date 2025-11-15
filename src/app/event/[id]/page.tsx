@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useParams, useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -52,10 +53,10 @@ export default function EventDetail() {
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (params.id) {
+    if (params?.id) {
       fetchEvent(params.id as string)
     }
-  }, [params.id])
+  }, [params?.id])
 
   useEffect(() => {
     if (event && isConnected) {
@@ -176,9 +177,8 @@ export default function EventDetail() {
       eventId: event?.id,
       eventTitle: event?.title,
       items,
-      totalAmount: items.reduce((sum, [_, qty]) => {
-        const ticketType = event?.ticketTypes.find(t => t.id === _)
-        return sum + (ticketType?.price || 0) * qty
+      totalAmount: items.reduce((sum, item) => {
+        return sum + (item.ticketType?.price || 0) * item.quantity
       }, 0)
     }))
 

@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Failed to reserve tickets:', error)
     return NextResponse.json(
-      { error: error.message || 'Failed to reserve tickets' },
+      { error: error instanceof Error ? error.message : 'Failed to reserve tickets' },
       { status: 500 }
     )
   }

@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
 import { RealtimeProvider } from "@/components/realtime-provider";
+import { SessionProvider } from "@/components/session-provider";
 
 const outfit = Outfit({
   variable: "--font-sans",
@@ -48,15 +49,15 @@ export default function RootLayout({
         className={`${outfit.variable} ${firaCode.variable} antialiased bg-background text-foreground font-sans`}
       >
         <ThemeProvider
-          attribute="class"
           defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
+          storageKey="tiketku-theme"
         >
-          <RealtimeProvider>
-            {children}
-            <Toaster />
-          </RealtimeProvider>
+          <SessionProvider>
+            <RealtimeProvider>
+              {children}
+              <Toaster />
+            </RealtimeProvider>
+          </SessionProvider>
         </ThemeProvider>
       </body>
     </html>

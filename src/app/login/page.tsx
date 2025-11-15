@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { signIn } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,58 +10,43 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Mail, Lock, User, Eye, EyeOff, Ticket, Users, Shield } from 'lucide-react'
+import { Mail, Lock, User, Eye, EyeOff, Ticket, Users, Shield, AlertCircle } from 'lucide-react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import Link from 'next/link'
 import { ThemeToggle } from '@/components/theme-toggle'
 
 export default function LoginPage() {
+  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   const [loginType, setLoginType] = useState<'user' | 'admin' | 'staff'>('user')
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setError('')
 
     try {
-      // Simulate login - dalam production ini akan call API
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          email,
-          password,
-          role: loginType
-        })
+      const result = await signIn('credentials', {
+        email,
+        password,
+        redirect: false,
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        // Save auth token to localStorage
-        localStorage.setItem('authToken', data.token)
-        localStorage.setItem('user', JSON.stringify(data.user))
-        
-        // Redirect based on role
-        switch (loginType) {
-          case 'admin':
-            window.location.href = '/admin'
-            break
-          case 'staff':
-            window.location.href = '/gate'
-            break
-          default:
-            window.location.href = '/my-tickets'
-        }
-      } else {
-        alert('Login gagal. Periksa email dan password Anda.')
+      if (result?.error) {
+        setError(result.error)
+      } else if (result?.ok) {
+        // Redirect based on role - we'll check role after login
+        // For now, redirect to home page
+        router.push('/')
+        router.refresh()
       }
     } catch (error) {
       console.error('Login error:', error)
-      alert('Terjadi kesalahan. Silakan coba lagi.')
+      setError('Terjadi kesalahan. Silakan coba lagi.')
     } finally {
       setLoading(false)
     }
@@ -134,6 +121,12 @@ export default function LoginPage() {
 
               <TabsContent value="user" className="mt-0">
                 <form onSubmit={handleLogin} className="space-y-4">
+                  {error && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  )}
                   <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
                     <Input
@@ -170,6 +163,14 @@ export default function LoginPage() {
                         )}
                       </Button>
                     </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <Link
+                      href="/forgot-password"
+                      className="text-sm text-blue-600 hover:underline"
+                    >
+                      Lupa password?
+                    </Link>
                   </div>
                   <Button type="submit" className="w-full" disabled={loading}>
                     {loading ? 'Memproses...' : 'Masuk'}
@@ -216,6 +217,14 @@ export default function LoginPage() {
                       </Button>
                     </div>
                   </div>
+                  <div className="flex justify-end">
+                    <Link
+                      href="/forgot-password"
+                      className="text-sm text-blue-600 hover:underline"
+                    >
+                      Lupa password?
+                    </Link>
+                  </div>
                   <Button type="submit" className="w-full" disabled={loading}>
                     {loading ? 'Memproses...' : 'Masuk sebagai Staff'}
                   </Button>
@@ -261,6 +270,14 @@ export default function LoginPage() {
                       </Button>
                     </div>
                   </div>
+                  <div className="flex justify-end">
+                    <Link
+                      href="/forgot-password"
+                      className="text-sm text-blue-600 hover:underline"
+                    >
+                      Lupa password?
+                    </Link>
+                  </div>
                   <Button type="submit" className="w-full" disabled={loading}>
                     {loading ? 'Memproses...' : 'Masuk sebagai Admin'}
                   </Button>
@@ -303,7 +320,11 @@ export default function LoginPage() {
           </div>
           
           <div className="text-sm text-muted-foreground">
-            <p>Belum punya akun? Hubungi administrator</p>
+            <p>Belum punya akun?{' '}
+              <Link href="/register" className="text-primary hover:underline">
+                Daftar Sekarang
+              </Link>
+            </p>
             <p className="mt-1">
               Butuh bantuan?{' '}
               <Link href="/help" className="text-primary hover:underline">

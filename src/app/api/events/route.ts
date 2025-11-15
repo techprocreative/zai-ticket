@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { EventStatus } from '@prisma/client'
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,7 +9,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50')
     const offset = parseInt(searchParams.get('offset') || '0')
 
-    const where = status ? { status: status.toUpperCase() } : {}
+    const where = status ? { status: status.toUpperCase() as EventStatus } : {}
 
     const events = await db.event.findMany({
       where,

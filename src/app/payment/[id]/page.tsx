@@ -6,14 +6,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { ArrowLeft, Clock, Copy, CheckCircle, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Clock, CreditCard, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
+import Script from 'next/script'
 
 interface Order {
   id: string
   totalAmount: number
   status: string
-  paymentMethod: string
+  expiresAt: string
+  midtransSnapToken?: string
   createdAt: string
   user: {
     name: string
@@ -33,26 +35,57 @@ interface Order {
   }[]
 }
 
+// Extend window type for Snap
+declare global {
+  interface Window {
+    snap?: {
+      pay: (token: string, options?: {
+        onSuccess?: (result: any) => void
+        onPending?: (result: any) => void
+        onError?: (result: any) => void
+        onClose?: () => void
+      }) => void
+    }
+  }
+}
+
 export default function Payment() {
   const params = useParams()
   const router = useRouter()
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
-  const [copied, setCopied] = useState(false)
-  const [countdown, setCountdown] = useState(900) // 15 minutes in seconds
+  const [snapLoaded, setSnapLoaded] = useState(false)
+  const [paying, setPaying] = useState(false)
+  const [timeLeft, setTimeLeft] = useState(0)
+
+  // Calculate time left from expiresAt
+  useEffect(() => {
+    if (!order?.expiresAt) return
+
+    const calculateTimeLeft = () => {
+      const now = new Date().getTime()
+      const expiry = new Date(order.expiresAt).getTime()
+      const diff = expiry - now
+      return Math.max(0, Math.floor(diff / 1000))
+    }
+
+    setTimeLeft(calculateTimeLeft())
+    const interval = setInterval(() => {
+      const left = calculateTimeLeft()
+      setTimeLeft(left)
+      if (left === 0) {
+        clearInterval(interval)
+      }
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [order?.expiresAt])
 
   useEffect(() => {
-    if (params.id) {
+    if (params?.id) {
       fetchOrder(params.id as string)
     }
-  }, [params.id])
-
-  useEffect(() => {
-    if (countdown > 0) {
-      const timer = setTimeout(() => setCountdown(countdown - 1), 1000)
-      return () => clearTimeout(timer)
-    }
-  }, [countdown])
+  }, [params])
 
   const fetchOrder = async (orderId: string) => {
     try {
@@ -81,12 +114,6 @@ export default function Payment() {
     return `${minutes}:${secs.toString().padStart(2, '0')}`
   }
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('id-ID', {
       day: 'numeric',
@@ -97,23 +124,34 @@ export default function Payment() {
     })
   }
 
-  const handlePaymentConfirmation = async () => {
-    if (!order) return
-
-    try {
-      const response = await fetch(`/api/orders/${order.id}/confirm-payment`, {
-        method: 'POST'
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to confirm payment')
-      }
-
-      router.push(`/success/${order.id}`)
-    } catch (error) {
-      console.error('Payment confirmation failed:', error)
-      alert('Terjadi kesalahan saat konfirmasi pembayaran. Silakan coba lagi.')
+  const handlePayment = () => {
+    if (!order?.midtransSnapToken || !window.snap) {
+      console.error('Snap not loaded or token missing')
+      return
     }
+
+    setPaying(true)
+
+    window.snap.pay(order.midtransSnapToken, {
+      onSuccess: (result) => {
+        console.log('Payment success:', result)
+        router.push(`/success/${order.id}`)
+      },
+      onPending: (result) => {
+        console.log('Payment pending:', result)
+        // Keep on payment page, show pending status
+        alert('Pembayaran Anda sedang diproses. Kami akan mengirimkan konfirmasi via email.')
+      },
+      onError: (result) => {
+        console.error('Payment error:', result)
+        setPaying(false)
+        alert('Terjadi kesalahan saat memproses pembayaran. Silakan coba lagi.')
+      },
+      onClose: () => {
+        console.log('Payment popup closed')
+        setPaying(false)
+      }
+    })
   }
 
   if (loading) {
@@ -146,243 +184,236 @@ export default function Payment() {
     )
   }
 
-  const isExpired = countdown === 0
+  const isExpired = timeLeft === 0
+  const isPaid = order.status === 'PAID'
+
+  if (isPaid) {
+    router.push(`/success/${order.id}`)
+    return null
+  }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card border-b sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center space-x-4">
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/checkout">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Kembali
-              </Link>
-            </Button>
-            <h1 className="text-xl font-bold">Pembayaran</h1>
-          </div>
-        </div>
-      </header>
+    <>
+      {/* Load Midtrans Snap.js */}
+      <Script
+        src={process.env.NEXT_PUBLIC_MIDTRANS_SNAP_URL || "https://app.sandbox.midtrans.com/snap/snap.js"}
+        data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
+        onLoad={() => setSnapLoaded(true)}
+        strategy="lazyOnload"
+      />
 
-      <div className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Payment Instructions */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Order Status */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center">
-                    {isExpired ? (
-                      <AlertCircle className="h-5 w-5 mr-2 text-destructive" />
-                    ) : (
-                      <Clock className="h-5 w-5 mr-2 text-primary" />
-                    )}
-                    Status Pembayaran
-                  </CardTitle>
-                  <Badge variant={isExpired ? "destructive" : "secondary"}>
-                    {isExpired ? 'Kadaluarsa' : 'Menunggu Pembayaran'}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {!isExpired ? (
-                  <div className="text-center">
-                    <p className="text-sm text-muted-foreground mb-2">
-                      Selesaikan pembayaran dalam:
-                    </p>
-                    <p className="text-3xl font-bold text-primary">
-                      {formatTime(countdown)}
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Batas waktu: {formatDate(new Date(Date.now() + countdown * 1000).toISOString())}
-                    </p>
+      <div className="min-h-screen bg-background">
+        {/* Header */}
+        <header className="bg-card border-b sticky top-0 z-10">
+          <div className="container mx-auto px-4 py-4">
+            <div className="flex items-center space-x-4">
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/checkout">
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Kembali
+                </Link>
+              </Button>
+              <h1 className="text-xl font-bold">Pembayaran</h1>
+            </div>
+          </div>
+        </header>
+
+        <div className="container mx-auto px-4 py-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Payment Section */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Order Status & Timer */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center">
+                      {isExpired ? (
+                        <AlertCircle className="h-5 w-5 mr-2 text-destructive" />
+                      ) : (
+                        <Clock className="h-5 w-5 mr-2 text-primary" />
+                      )}
+                      Status Pembayaran
+                    </CardTitle>
+                    <Badge variant={isExpired ? "destructive" : "secondary"}>
+                      {isExpired ? 'Kadaluarsa' : 'Menunggu Pembayaran'}
+                    </Badge>
                   </div>
-                ) : (
-                  <div className="text-center">
-                    <p className="text-lg text-destructive font-medium">
-                      Waktu pembayaran telah habis
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Silakan buat pesanan baru
-                    </p>
-                    <Button asChild className="mt-4">
-                      <Link href="/">Buat Pesanan Baru</Link>
+                </CardHeader>
+                <CardContent>
+                  {!isExpired ? (
+                    <div className="text-center">
+                      <p className="text-sm text-muted-foreground mb-2">
+                        Selesaikan pembayaran dalam:
+                      </p>
+                      <p className="text-3xl font-bold text-primary">
+                        {formatTime(timeLeft)}
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Batas waktu: {formatDate(order.expiresAt)}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <p className="text-lg text-destructive font-medium">
+                        Waktu pembayaran telah habis
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Silakan buat pesanan baru
+                      </p>
+                      <Button asChild className="mt-4">
+                        <Link href="/">Buat Pesanan Baru</Link>
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Payment Button */}
+              {!isExpired && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <CreditCard className="h-5 w-5 mr-2" />
+                      Lanjutkan Pembayaran
+                    </CardTitle>
+                    <CardDescription>
+                      Klik tombol di bawah untuk memilih metode pembayaran
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="bg-muted p-4 rounded-lg">
+                      <h4 className="font-medium mb-2">Metode Pembayaran Tersedia:</h4>
+                      <ul className="space-y-1 text-sm text-muted-foreground">
+                        <li>• Virtual Account (BCA, Mandiri, BNI, BRI, Permata)</li>
+                        <li>• Kartu Kredit/Debit (Visa, Mastercard, JCB)</li>
+                        <li>• E-Wallet (GoPay, ShopeePay, QRIS)</li>
+                        <li>• Convenience Store (Indomaret, Alfamart)</li>
+                      </ul>
+                    </div>
+
+                    <Button 
+                      className="w-full h-12 text-lg" 
+                      size="lg"
+                      onClick={handlePayment}
+                      disabled={!snapLoaded || paying || !order.midtransSnapToken}
+                    >
+                      {paying ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Membuka Pembayaran...
+                        </>
+                      ) : !snapLoaded ? (
+                        'Memuat Pembayaran...'
+                      ) : (
+                        <>
+                          <CreditCard className="h-5 w-5 mr-2" />
+                          Bayar Sekarang
+                        </>
+                      )}
                     </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
 
-            {/* Payment Method */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Metode Pembayaran</CardTitle>
-                <CardDescription>
-                  Transfer ke rekening bank berikut:
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="border rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <p className="font-medium">Bank Central Asia (BCA)</p>
-                      <p className="text-sm text-muted-foreground">Virtual Account</p>
-                    </div>
-                    <Badge variant="outline">BCA</Badge>
-                  </div>
-                  <div className="bg-muted p-3 rounded">
-                    <p className="text-sm text-muted-foreground">Nomor Virtual Account</p>
-                    <div className="flex items-center justify-between mt-1">
-                      <p className="font-mono font-bold text-lg">8806 0812 3456 7890</p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => copyToClipboard('8806081234567890')}
-                      >
-                        {copied ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+                    <p className="text-xs text-center text-muted-foreground">
+                      Pembayaran aman dan terenkripsi melalui Midtrans
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
 
-                <div className="border rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <p className="font-medium">Bank Mandiri</p>
-                      <p className="text-sm text-muted-foreground">Virtual Account</p>
+              {/* Payment Instructions */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Petunjuk Pembayaran</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex items-start space-x-3">
+                      <div className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-bold">1</div>
+                      <div>
+                        <p className="font-medium">Klik tombol "Bayar Sekarang"</p>
+                        <p className="text-sm text-muted-foreground">
+                          Popup pembayaran akan terbuka dengan berbagai pilihan metode
+                        </p>
+                      </div>
                     </div>
-                    <Badge variant="outline">Mandiri</Badge>
-                  </div>
-                  <div className="bg-muted p-3 rounded">
-                    <p className="text-sm text-muted-foreground">Nomor Virtual Account</p>
-                    <div className="flex items-center justify-between mt-1">
-                      <p className="font-mono font-bold text-lg">8806 0812 3456 7890</p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => copyToClipboard('8806081234567890')}
-                      >
-                        {copied ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                      </Button>
+                    <div className="flex items-start space-x-3">
+                      <div className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-bold">2</div>
+                      <div>
+                        <p className="font-medium">Pilih metode pembayaran</p>
+                        <p className="text-sm text-muted-foreground">
+                          Pilih metode yang paling sesuai dengan Anda
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start space-x-3">
+                      <div className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-bold">3</div>
+                      <div>
+                        <p className="font-medium">Ikuti instruksi pembayaran</p>
+                        <p className="text-sm text-muted-foreground">
+                          Setiap metode memiliki panduan lengkap untuk pembayaran
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start space-x-3">
+                      <div className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-bold">4</div>
+                      <div>
+                        <p className="font-medium">Selesaikan pembayaran</p>
+                        <p className="text-sm text-muted-foreground">
+                          Tiket akan dikirim ke email Anda setelah pembayaran berhasil
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
 
-            {/* Payment Instructions */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Petunjuk Pembayaran</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-start space-x-3">
-                    <div className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-bold">1</div>
-                    <div>
-                      <p className="font-medium">Buka aplikasi mobile banking atau ATM</p>
-                      <p className="text-sm text-muted-foreground">
-                        Pilih bank yang sesuai dengan metode pembayaran
-                      </p>
-                    </div>
+            {/* Order Summary */}
+            <div className="lg:col-span-1">
+              <Card className="sticky top-24">
+                <CardHeader>
+                  <CardTitle>Detail Pesanan</CardTitle>
+                  <CardDescription>Order ID: {order.id}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <h4 className="font-semibold">{order.event.title}</h4>
+                    <p className="text-sm text-muted-foreground">{order.event.venue}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatDate(order.event.startDate)}
+                    </p>
                   </div>
-                  <div className="flex items-start space-x-3">
-                    <div className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-bold">2</div>
-                    <div>
-                      <p className="font-medium">Pilih menu Virtual Account</p>
-                      <p className="text-sm text-muted-foreground">
-                        Masukkan nomor virtual account yang tertera
-                      </p>
-                    </div>
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    {order.items.map((item, index) => (
+                      <div key={index} className="flex justify-between text-sm">
+                        <span>{item.ticketType.name} x {item.quantity}</span>
+                        <span>Rp {(item.unitPrice * item.quantity).toLocaleString('id-ID')}</span>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex items-start space-x-3">
-                    <div className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-bold">3</div>
-                    <div>
-                      <p className="font-medium">Masukkan jumlah pembayaran</p>
-                      <p className="text-sm text-muted-foreground">
-                        Pastikan jumlah yang dibayarkan sesuai
-                      </p>
-                    </div>
+
+                  <Separator />
+
+                  <div className="flex justify-between font-bold">
+                    <span>Total Pembayaran</span>
+                    <span className="text-primary">Rp {order.totalAmount.toLocaleString('id-ID')}</span>
                   </div>
-                  <div className="flex items-start space-x-3">
-                    <div className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-bold">4</div>
-                    <div>
-                      <p className="font-medium">Konfirmasi pembayaran</p>
-                      <p className="text-sm text-muted-foreground">
-                        Klik tombol "Konfirmasi Pembayaran" setelah transfer
-                      </p>
-                    </div>
+
+                  <Separator />
+
+                  <div>
+                    <p className="text-sm font-medium mb-2">Informasi Pembeli:</p>
+                    <p className="text-sm">{order.user.name}</p>
+                    <p className="text-sm text-muted-foreground">{order.user.email}</p>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Action Buttons */}
-            {!isExpired && (
-              <div className="flex space-x-4">
-                <Button 
-                  className="flex-1" 
-                  onClick={handlePaymentConfirmation}
-                >
-                  Konfirmasi Pembayaran
-                </Button>
-                <Button variant="outline" asChild>
-                  <Link href={`/event/${order.event.title.toLowerCase().replace(/\s+/g, '-')}`}>
-                    Lihat Event
-                  </Link>
-                </Button>
-              </div>
-            )}
-          </div>
-
-          {/* Order Summary */}
-          <div className="lg:col-span-1">
-            <Card className="sticky top-24">
-              <CardHeader>
-                <CardTitle>Detail Pesanan</CardTitle>
-                <CardDescription>Order ID: {order.id}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <h4 className="font-semibold">{order.event.title}</h4>
-                  <p className="text-sm text-muted-foreground">{order.event.venue}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {formatDate(order.event.startDate)}
-                  </p>
-                </div>
-
-                <Separator />
-
-                <div className="space-y-2">
-                  {order.items.map((item, index) => (
-                    <div key={index} className="flex justify-between text-sm">
-                      <span>{item.ticketType.name} x {item.quantity}</span>
-                      <span>Rp {(item.unitPrice * item.quantity).toLocaleString('id-ID')}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <Separator />
-
-                <div className="flex justify-between font-bold">
-                  <span>Total Pembayaran</span>
-                  <span className="text-primary">Rp {order.totalAmount.toLocaleString('id-ID')}</span>
-                </div>
-
-                <Separator />
-
-                <div>
-                  <p className="text-sm font-medium mb-2">Informasi Pembeli:</p>
-                  <p className="text-sm">{order.user.name}</p>
-                  <p className="text-sm text-muted-foreground">{order.user.email}</p>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }

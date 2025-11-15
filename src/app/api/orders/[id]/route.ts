@@ -3,12 +3,13 @@ import { db } from '@/lib/db'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const order = await db.order.findUnique({
       where: {
-        id: params.id
+        id
       },
       include: {
         user: {
@@ -75,15 +76,16 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const body = await request.json()
     const { status, paymentId } = body
 
     const order = await db.order.update({
       where: {
-        id: params.id
+        id
       },
       data: {
         status,

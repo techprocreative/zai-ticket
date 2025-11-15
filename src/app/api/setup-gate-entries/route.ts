@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { GateEntry } from '@prisma/client'
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,7 +12,7 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    const gateEntries = []
+    const gateEntries: GateEntry[] = []
     
     for (const event of events) {
       // Create multiple gate entries for each event

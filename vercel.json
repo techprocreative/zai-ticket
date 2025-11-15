@@ -1,0 +1,10 @@
+{
+  "buildCommand": "npm run build",
+  "framework": "nextjs",
+  "crons": [
+    {
+      "path": "/api/cron/expire-orders",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}

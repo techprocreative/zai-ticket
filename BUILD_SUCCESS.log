@@ -1,0 +1,88 @@
+
+> nextjs_tailwind_shadcn_ts@0.1.0 build
+> next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/
+
+   ▲ Next.js 15.3.5
+   - Environments: .env
+   - Experiments (use with caution):
+     · clientTraceMetadata
+
+   Creating an optimized production build ...
+[@sentry/nextjs] It appears you've configured a `sentry.server.config.ts` file. Please ensure to put this file's content into the `register()` function of a Next.js instrumentation file instead. To ensure correct functionality of the SDK, `Sentry.init` must be called inside of an instrumentation file. Learn more about setting up an instrumentation file in Next.js: https://nextjs.org/docs/app/building-your-application/optimizing/instrumentation. You can safely delete the `sentry.server.config.ts` file afterward.
+[@sentry/nextjs] Could not find a Next.js instrumentation file. This indicates an incomplete configuration of the Sentry SDK. An instrumentation file is required for the Sentry SDK to be initialized on the server: https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/#create-initialization-config-files (you can suppress this warning by setting SENTRY_SUPPRESS_INSTRUMENTATION_FILE_WARNING=1 as environment variable)
+[@sentry/nextjs] It seems like you don't have a global error handler set up. It is recommended that you add a 'global-error.js' file with Sentry instrumentation so that React rendering errors are reported to Sentry. Read more: https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/#react-render-errors-in-app-router (you can suppress this warning by setting SENTRY_SUPPRESS_GLOBAL_ERROR_HANDLER_FILE_WARNING=1 as environment variable)
+[@sentry/nextjs] It appears you've configured a `sentry.edge.config.ts` file. Please ensure to put this file's content into the `register()` function of a Next.js instrumentation file instead. To ensure correct functionality of the SDK, `Sentry.init` must be called inside of an instrumentation file. Learn more about setting up an instrumentation file in Next.js: https://nextjs.org/docs/app/building-your-application/optimizing/instrumentation. You can safely delete the `sentry.edge.config.ts` file afterward.
+[@sentry/nextjs] DEPRECATION WARNING: It is recommended renaming your `sentry.client.config.ts` file, or moving its content to `instrumentation-client.ts`. When using Turbopack `sentry.client.config.ts` will no longer work. Read more about the `instrumentation-client.ts` file: https://nextjs.org/docs/app/api-reference/file-conventions/instrumentation-client
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (185kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (139kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+ ✓ Compiled successfully in 22.0s
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/35) ...
+   Generating static pages (8/35) 
+   Generating static pages (17/35) 
+   Generating static pages (26/35) 
+ ✓ Generating static pages (35/35)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                   Size  First Load JS
+┌ ○ /                                      13.7 kB         241 kB
+├ ○ /_not-found                            1.14 kB         216 kB
+├ ○ /admin                                 6.99 kB         283 kB
+├ ƒ /api                                     394 B         215 kB
+├ ƒ /api/admin/users                         394 B         215 kB
+├ ƒ /api/auth/[...nextauth]                  395 B         215 kB
+├ ƒ /api/auth/forgot-password                394 B         215 kB
+├ ƒ /api/auth/register                       396 B         215 kB
+├ ƒ /api/auth/reset-password                 395 B         215 kB
+├ ƒ /api/auth/verify-email                   395 B         215 kB
+├ ƒ /api/cron/expire-orders                  395 B         215 kB
+├ ƒ /api/events                              395 B         215 kB
+├ ƒ /api/events/[id]                         394 B         215 kB
+├ ƒ /api/gate-entries                        395 B         215 kB
+├ ƒ /api/orders                              395 B         215 kB
+├ ƒ /api/orders/[id]                         396 B         215 kB
+├ ƒ /api/orders/[id]/confirm-payment         394 B         215 kB
+├ ƒ /api/payments/create-snap                396 B         215 kB
+├ ƒ /api/payments/webhook                    394 B         215 kB
+├ ƒ /api/scans/recent                        393 B         215 kB
+├ ƒ /api/setup-gate-entries                  395 B         215 kB
+├ ƒ /api/setup-sample-data                   394 B         215 kB
+├ ƒ /api/slides                              395 B         215 kB
+├ ƒ /api/slides/seed                         395 B         215 kB
+├ ƒ /api/tickets/availability                395 B         215 kB
+├ ƒ /api/tickets/validate                    394 B         215 kB
+├ ƒ /api/users                               393 B         215 kB
+├ ○ /checkout                              5.26 kB         232 kB
+├ ƒ /event/[id]                             6.1 kB         246 kB
+├ ○ /forgot-password                       3.07 kB         230 kB
+├ ○ /gate                                  6.77 kB         234 kB
+├ ○ /help                                  5.62 kB         233 kB
+├ ○ /login                                  8.9 kB         249 kB
+├ ○ /my-tickets                            5.46 kB         232 kB
+├ ƒ /payment/[id]                          5.25 kB         232 kB
+├ ○ /register                              5.84 kB         242 kB
+├ ○ /reset-password                        4.11 kB         229 kB
+├ ○ /staff                                 3.87 kB         278 kB
+├ ƒ /success/[id]                          5.16 kB         232 kB
+└ ○ /verify-email                          3.61 kB         228 kB
++ First Load JS shared by all               215 kB
+  ├ chunks/4431-16d1707b5f5114db.js         122 kB
+  ├ chunks/4bd1b696-2c41105f4388dbfb.js    53.4 kB
+  ├ chunks/52774a7f-f7f69ea7868990c0.js    37.1 kB
+  └ other shared chunks (total)            2.82 kB
+
+Route (pages)                                 Size  First Load JS
+─ ƒ /api/socket                                0 B         181 kB
++ First Load JS shared by all               181 kB
+  ├ chunks/framework-447c4c7b6f1c4770.js   59.9 kB
+  ├ chunks/main-b0223abbe4e20504.js        39.9 kB
+  ├ chunks/pages/_app-2cd4d0bf2abc4e0b.js  79.2 kB
+  └ other shared chunks (total)            1.86 kB
+
+ƒ Middleware                                 67 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

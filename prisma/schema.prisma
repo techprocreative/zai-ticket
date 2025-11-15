@@ -9,8 +9,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum UserRole {
@@ -31,6 +32,7 @@ enum TicketStatus {
   ACTIVE
   USED
   CANCELLED
+  EXPIRED
 }
 
 enum OrderStatus {
@@ -43,17 +45,22 @@ enum OrderStatus {
 model User {
   id            String   @id @default(cuid())
   email         String   @unique
+  password      String?  // For credential-based auth
   name          String?
   phone         String?
   role          UserRole @default(USER)
+  emailVerified DateTime? // For email verification
+  image         String?   // For OAuth providers
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  
+
   // Relations
   orders        Order[]
   tickets       Ticket[]
   gateScans     GateScan[]
-  
+  accounts      Account[]
+  sessions      Session[]
+
   @@map("users")
 }
 
@@ -102,22 +109,27 @@ model TicketType {
 }
 
 model Order {
-  id              String       @id @default(cuid())
-  userId          String
-  eventId         String
-  totalAmount     Float
-  status          OrderStatus  @default(PENDING)
-  paymentMethod   String?
-  paymentId       String?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  
+  id                    String       @id @default(cuid())
+  userId                String
+  eventId               String
+  totalAmount           Float
+  status                OrderStatus  @default(PENDING)
+  paymentMethod         String?
+  paymentId             String?
+  midtransTransactionId String?      // Midtrans transaction ID
+  midtransSnapToken     String?      // Midtrans Snap token
+  paymentUrl            String?      // Payment page URL
+  paidAt                DateTime?    // Payment timestamp
+  expiresAt             DateTime?    // Payment expiry
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
   // Relations
-  user            User         @relation(fields: [userId], references: [id])
-  event           Event        @relation(fields: [eventId], references: [id])
-  items           OrderItem[]
-  tickets         Ticket[]
-  
+  user                  User         @relation(fields: [userId], references: [id])
+  event                 Event        @relation(fields: [eventId], references: [id])
+  items                 OrderItem[]
+  tickets               Ticket[]
+
   @@map("orders")
 }
 
@@ -207,29 +219,42 @@ model HeroSlide {
   @@index([isActive, sortOrder])
 }
 
-enum UserRole {
-  USER
-  ADMIN
-  GATE_OPERATOR
+// NextAuth.js Models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
 }
 
-enum EventStatus {
-  UPCOMING
-  ONGOING
-  COMPLETED
-  CANCELLED
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
 }
 
-enum OrderStatus {
-  PENDING
-  PAID
-  CANCELLED
-  REFUNDED
-}
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
 
-enum TicketStatus {
-  ACTIVE
-  USED
-  CANCELLED
-  EXPIRED
+  @@unique([identifier, token])
+  @@map("verification_tokens")
 }

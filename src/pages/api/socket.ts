@@ -55,7 +55,7 @@ const socketHandler = (req: NextApiRequest, res: NextApiResponse & { socket: any
             }
           })
 
-          if (ticketType) {
+          if (ticketType && io) {
             const available = ticketType.maxQuantity - ticketType.soldQuantity
             
             // Send to specific event room
